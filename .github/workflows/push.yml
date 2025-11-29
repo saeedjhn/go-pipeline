@@ -1,5 +1,8 @@
 name: golang-pipeline
-on: push
+
+on:
+  push
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -13,7 +16,7 @@ jobs:
           go mod download
 
       - name: Run Unit Tests
-        run: go test
+        run: go test ./...
 
   deploy:
     runs-on: ubuntu-latest
@@ -26,17 +29,14 @@ jobs:
       - name: Extract Version
         id: version_step
         run: |
-          echo "##[set-output name=version;]VERSION=${GITHUB_REF#$"refs/tags/v"}"
+          echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
           echo "version_tag=${{ secrets.DOCKERHUB_REPOSITORY }}:${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
           echo "latest_tag=${{ secrets.DOCKERHUB_REPOSITORY }}:latest" >> $GITHUB_OUTPUT
-      #          echo "##[set-output name=version_tag;]leaderghm/go-pipeline:${GITHUB_REF#$"refs/tags/v"}"
-      #          echo "##[set-output name=latest_tag;]leaderghm/go-pipeline:latest"
-      #          echo "##[set-output name=version_tag;]$GITHUB_REPOSITORY:${GITHUB_REF#$"refs/tags/v"}"
 
       - name: Print Version
         run: |
-          echo ${{steps.version_step.outputs.version_tag}}
-          echo ${{steps.version_step.outputs.latest_tag}}
+          echo "VERSION TAG: ${{steps.version_step.outputs.version_tag}}"
+          echo "LATEST TAG:  ${{steps.version_step.outputs.latest_tag}}"
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v1
@@ -50,19 +50,16 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: PrepareReg Names
-        id: read-docker-image-identifiers
+      - name: Prepare Tag Names
         run: |
           echo VERSION_TAG=$(echo ${{ steps.version_step.outputs.version_tag }} | tr '[:upper:]' '[:lower:]') >> $GITHUB_ENV
-          echo LASTEST_TAG=$(echo ${{ steps.version_step.outputs.latest_tag  }} | tr '[:upper:]' '[:lower:]') >> $GITHUB_ENV
+          echo LASTEST_TAG=$(echo ${{ steps.version_step.outputs.latest_tag }} | tr '[:upper:]' '[:lower:]') >> $GITHUB_ENV
 
-      - name: "ls"
+      - name: Show directory
         run: |
           ls -la deployments/production/
-          ls -alF
 
-      - name: Build and push
-        id: docker_build
+      - name: Build and push on dockerhub
         uses: docker/build-push-action@v2
         with:
           context: .
@@ -72,4 +69,20 @@ jobs:
             ${{env.VERSION_TAG}}
             ${{env.LASTEST_TAG}}
           build-args: |
-            ${{steps.version_step.outputs.version}}
+            version=${{steps.version_step.outputs.version}}
+
+      - name: Install Liara CLI
+        run: |
+          curl -L https://cli.liara.ir/install.sh | bash
+          liara --version
+
+      - name: Deploy to Liara
+        env:
+          LIARA_TOKEN: ${{ secrets.LIARA_API_TOKEN }}
+        run: |
+          liara deploy \
+            --app="go-pipeline" \
+            --dockerfile="deployments/production/Dockerfile" \
+            --api-token="$LIARA_TOKEN" \
+            --port="8000" \
+            --no-app-logs
