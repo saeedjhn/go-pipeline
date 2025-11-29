@@ -16,7 +16,7 @@ jobs:
           go mod download
 
       - name: Run Unit Tests
-        run: go test ./...
+        run: go test ./.
 
   deploy:
     runs-on: ubuntu-latest
