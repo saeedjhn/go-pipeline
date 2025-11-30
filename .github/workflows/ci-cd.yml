@@ -1,4 +1,4 @@
-name: golang-cd
+name: golang-ci-cd
 
 on:
   push:
@@ -6,24 +6,36 @@ on:
       - master
     tags:
       - 'v*'
-#  workflow_run:
-#    workflows: [ "CI" ]
-#    types:
-#      - completed
 
 jobs:
-  cd:
-    #    if: >
-    #      (github.event_name == 'workflow_run' &&
-    #       github.event.workflow_run.conclusion == 'success')
-    #      ||
-    #      (github.event_name == 'push' &&
-    #       startsWith(github.ref, 'refs/tags/v'))
+  test-build-deploy:
     runs-on: ubuntu-latest
-
     steps:
       - name: Check repository
         uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.23.2'
+
+      - name: Cache Go modules
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+
+      - name: Install dependencies
+        run: |
+          go mod tidy
+          go mod download
+
+      - name: Run unit tests
+        run: go test ./...
+
+      #      - name: Run lint
 
       - name: Extract version
         id: version
@@ -32,11 +44,10 @@ jobs:
           echo "VERSION_TAG=${{ secrets.DOCKERHUB_REPOSITORY }}:${GITHUB_REF#refs/tags/v}" >> $GITHUB_ENV
           echo "LATEST_TAG=${{ secrets.DOCKERHUB_REPOSITORY }}:latest" >> $GITHUB_ENV
 
-      - name: Print version
+      - name: Print Version
         run: |
-          echo "VERSION:      $VERSION"
-          echo "VERSION TAG:  $VERSION_TAG"
-          echo "LATEST TAG:   $LATEST_TAG"
+          echo "VERSION TAG: ${{steps.version_step.outputs.version_tag}}"
+          echo "LATEST TAG:  ${{steps.version_step.outputs.latest_tag}}"
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v1
@@ -51,6 +62,7 @@ jobs:
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Build and push Docker image
+        if: startsWith(github.ref, 'refs/tags') # refs/tags/v only valid tags
         uses: docker/build-push-action@v3
         with:
           context: .
@@ -63,6 +75,7 @@ jobs:
             version=${{ env.VERSION }}
 
       - name: Deploy to Liara
+        if: startsWith(github.ref, 'refs/tags') # refs/tags/v only valid tag
         env:
           LIARA_TOKEN: ${{ secrets.LIARA_API_TOKEN }}
         run: |
