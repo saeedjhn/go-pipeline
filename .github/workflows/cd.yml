@@ -6,9 +6,14 @@ on:
       - master
     tags:
       - 'v*'
+  workflow_run:
+    workflows: [ "CI" ]
+    types:
+      - completed
 
 jobs:
   cd:
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
 
     steps:
