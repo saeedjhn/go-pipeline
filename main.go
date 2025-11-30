@@ -6,7 +6,7 @@ import (
 	"net/http"
 )
 
-var version = "dev"
+// var version = "dev"
 
 func main() {
 	e := echo.New()
