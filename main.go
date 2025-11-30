@@ -14,13 +14,13 @@ func main() {
 	e.GET("/", func(c echo.Context) error {
 		log.Println("-- / invoked --")
 
-		return c.String(http.StatusOK, "-- !Root Page! --")
+		return c.String(http.StatusOK, "-- Root Page --")
 	})
 
 	e.GET("/about", func(c echo.Context) error {
 		log.Println("-- /about invoked --")
 
-		return c.String(http.StatusOK, "-- !About Page! --")
+		return c.String(http.StatusOK, "-- About Page --")
 	})
 
 	e.Logger.Fatal(e.Start(":8000"))
